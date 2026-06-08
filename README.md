@@ -45,6 +45,7 @@ You can easily customize the tournament's branding, primary colors, and typograp
   --dark-bg: #212529;        /* Change scoreboard background */
   --font-family: 'Segoe UI', system-ui, sans-serif;
 }
+```
 
 
 ## AI Disclaimer
