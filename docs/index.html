@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harvest Havoc — Event System Documentation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap');
+
+  :root {
+    --red: #C41E1E;
+    --red-dim: #8B1515;
+    --red-glow: rgba(196,30,30,0.15);
+    --yellow: #E8B800;
+    --yellow-dim: #A07F00;
+    --bg: #0E0C0A;
+    --bg2: #161310;
+    --bg3: #1E1A16;
+    --border: #2A2520;
+    --border2: #3A332C;
+    --text: #F0EDE8;
+    --text2: #A09890;
+    --text3: #5A524A;
+    --green: #2DA84A;
+    --green-bg: #0A1E0F;
+    --blue: #2B7DE8;
+    --blue-bg: #0A1428;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  /* ── NAVIGATION ── */
+  .site-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(14,12,10,0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 52px;
+  }
+  .nav-brand {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--red);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-right: 32px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .nav-tabs {
+    display: flex;
+    gap: 0;
+    flex: 1;
+    height: 100%;
+  }
+  .nav-tab {
+    padding: 0 20px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    text-decoration: none;
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+  }
+  .nav-tab:hover { color: var(--text2); }
+  .nav-tab.active { color: var(--text); border-bottom-color: var(--red); }
+  .nav-badge {
+    font-size: 9px;
+    font-family: var(--mono);
+    background: var(--red);
+    color: #fff;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── PAGES ── */
+  .doc-page { display: none; }
+  .doc-page.active { display: block; }
+
+  /* ── QUICK START ── */
+  .qs-hero {
+    background: linear-gradient(160deg, #1a0505 0%, var(--bg) 60%);
+    border-bottom: 1px solid var(--border);
+    padding: 64px 48px 48px;
+    position: relative;
+    overflow: hidden;
+  }
+  .qs-hero::before {
+    content: '🌾';
+    position: absolute;
+    right: 48px;
+    top: 32px;
+    font-size: 96px;
+    opacity: 0.08;
+  }
+  .qs-hero-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--red);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .qs-hero h1 {
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+    max-width: 600px;
+  }
+  .qs-hero h1 em { color: var(--red); font-style: normal; }
+  .qs-hero-sub {
+    font-size: 16px;
+    color: var(--text2);
+    max-width: 520px;
+    line-height: 1.6;
+  }
+
+  .qs-body { max-width: 860px; margin: 0 auto; padding: 48px 32px; }
+
+  .qs-steps { display: flex; flex-direction: column; gap: 0; }
+  .qs-step {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 0 24px;
+    padding-bottom: 40px;
+    position: relative;
+  }
+  .qs-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 27px;
+    top: 52px;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .qs-step-num {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid var(--red);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--red);
+    flex-shrink: 0;
+    background: var(--red-glow);
+    position: relative;
+    z-index: 1;
+  }
+  .qs-step-content { padding-top: 12px; }
+  .qs-step-content h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+  .qs-step-content p {
+    color: var(--text2);
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .tip-box {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-left: 3px solid var(--yellow);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text2);
+    margin-top: 10px;
+  }
+  .tip-box strong { color: var(--yellow); }
+
+  .info-box {
+    background: var(--blue-bg);
+    border: 1px solid var(--blue);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #88b4f8;
+    margin-top: 10px;
+  }
+  .info-box strong { color: #60a5fa; }
+
+  .success-box {
+    background: var(--green-bg);
+    border: 1px solid var(--green);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #86efac;
+    margin-top: 10px;
+  }
+
+  .kbd {
+    display: inline-block;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .flow-diagram {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 14px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 13px;
+  }
+  .flow-state {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .flow-state.red { border-color: var(--red); color: #f87171; background: var(--red-glow); }
+  .flow-state.green { border-color: var(--green); color: #86efac; background: var(--green-bg); }
+  .flow-state.blue { border-color: var(--blue); color: #88b4f8; background: var(--blue-bg); }
+  .flow-state.yellow { border-color: var(--yellow); color: #fcd34d; background: rgba(232,184,0,0.1); }
+  .flow-arrow { color: var(--text3); font-size: 16px; }
+
+  .shortcut-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .shortcut-row {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+  }
+  .shortcut-row .label { color: var(--text2); }
+
+  /* ── SHARED SECTION STYLES ── */
+  .section-header {
+    padding: 32px 32px 0;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .section-eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--red);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .section-title {
+    font-size: clamp(22px, 3vw, 32px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .section-desc {
+    font-size: 14px;
+    color: var(--text2);
+    max-width: 600px;
+  }
+
+  /* ── ADVANCED MANUAL ── */
+  .manual-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: calc(100vh - 52px);
+  }
+  .manual-toc {
+    position: sticky;
+    top: 52px;
+    height: calc(100vh - 52px);
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    background: var(--bg2);
+  }
+  .toc-section {
+    padding: 0 20px;
+    margin-bottom: 20px;
+  }
+  .toc-section-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .toc-link {
+    display: block;
+    font-size: 12px;
+    color: var(--text2);
+    text-decoration: none;
+    padding: 3px 0;
+    transition: color 0.12s;
+  }
+  .toc-link:hover { color: var(--text); }
+  .toc-link.active { color: var(--red); }
+
+  .manual-content {
+    padding: 40px 48px;
+    max-width: 760px;
+  }
+  .manual-content h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 48px 0 16px;
+    padding-top: 48px;
+    border-top: 1px solid var(--border);
+    letter-spacing: -0.02em;
+    scroll-margin-top: 72px;
+  }
+  .manual-content h2:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+  .manual-content h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 28px 0 10px;
+    color: var(--text);
+    scroll-margin-top: 72px;
+  }
+  .manual-content p {
+    color: var(--text2);
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  .manual-content ul, .manual-content ol {
+    color: var(--text2);
+    font-size: 14px;
+    padding-left: 20px;
+    margin-bottom: 12px;
+  }
+  .manual-content li { margin-bottom: 4px; }
+  .manual-content strong { color: var(--text); }
+
+  .fn-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 16px 0;
+    overflow: hidden;
+  }
+  .fn-header {
+    background: var(--bg3);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fn-name {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--yellow);
+  }
+  .fn-tag {
+    font-size: 9px;
+    font-family: var(--mono);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  .fn-tag.setup { background: rgba(43,125,232,0.2); color: #88b4f8; }
+  .fn-tag.queue { background: rgba(45,168,74,0.2); color: #86efac; }
+  .fn-tag.score { background: rgba(196,30,30,0.2); color: #f87171; }
+  .fn-tag.sb { background: rgba(124,58,237,0.2); color: #c4b5fd; }
+  .fn-tag.sync { background: rgba(232,184,0,0.2); color: #fcd34d; }
+  .fn-tag.timer { background: rgba(14,116,144,0.2); color: #67e8f9; }
+  .fn-body { padding: 12px 16px; }
+  .fn-body p { font-size: 13px; color: var(--text2); margin-bottom: 8px; }
+  .fn-body p:last-child { margin-bottom: 0; }
+
+  .score-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 12px 0;
+  }
+  .score-table th {
+    background: var(--bg3);
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: 0.06em;
+    color: var(--text2);
+    border-bottom: 1px solid var(--border);
+  }
+  .score-table td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+    vertical-align: top;
+  }
+  .score-table tr:last-child td { border-bottom: none; }
+  .score-table td:first-child { color: var(--text); font-family: var(--mono); font-size: 12px; }
+  .score-table .pts { color: var(--yellow); font-weight: 600; font-family: var(--mono); }
+
+  /* ── TECHNICAL DOCS ── */
+  .tech-content {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 48px;
+  }
+  .tech-content h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 48px 0 14px;
+    padding-top: 48px;
+    border-top: 1px solid var(--border);
+    letter-spacing: -0.02em;
+    scroll-margin-top: 72px;
+  }
+  .tech-content h2:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .tech-content h3 { font-size: 15px; font-weight: 700; margin: 24px 0 8px; scroll-margin-top: 72px; }
+  .tech-content p { color: var(--text2); font-size: 14px; margin-bottom: 12px; }
+  .tech-content ul, .tech-content ol { color: var(--text2); font-size: 14px; padding-left: 20px; margin-bottom: 12px; }
+  .tech-content li { margin-bottom: 4px; }
+  .tech-content strong { color: var(--text); }
+
+  pre {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text2);
+  }
+  code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--yellow);
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+  }
+
+  .state-diagram {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    margin: 16px 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 2;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .arch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .arch-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .arch-card h4 {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--yellow);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .arch-card p { font-size: 12px; color: var(--text2); margin: 0; }
+
+  .var-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin: 12px 0;
+  }
+  .var-table th {
+    background: var(--bg3);
+    text-align: left;
+    padding: 7px 10px;
+    font-size: 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.06em;
+    color: var(--text3);
+    border-bottom: 1px solid var(--border);
+  }
+  .var-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: var(--text2);
+  }
+  .var-table tr:last-child td { border-bottom: none; }
+  .var-table td:first-child { font-family: var(--mono); color: var(--yellow); font-size: 12px; white-space: nowrap; }
+  .var-table td:nth-child(2) { font-family: var(--mono); color: #88b4f8; font-size: 11px; }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  a { color: var(--red); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  @media (max-width: 720px) {
+    .manual-layout { grid-template-columns: 1fr; }
+    .manual-toc { display: none; }
+    .manual-content, .tech-content { padding: 24px 20px; }
+    .qs-hero { padding: 40px 20px 32px; }
+    .qs-body { padding: 32px 20px; }
+    .arch-grid { grid-template-columns: 1fr; }
+    .shortcut-grid { grid-template-columns: 1fr; }
+    .site-nav { padding: 0 16px; gap: 0; }
+    .nav-brand { margin-right: 16px; font-size: 11px; }
+    .nav-tab { padding: 0 10px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="nav-brand" href="#">🌾 HH Docs</a>
+  <div class="nav-tabs">
+    <a class="nav-tab active" onclick="switchPage('qs', this)">Quick start</a>
+    <a class="nav-tab" onclick="switchPage('manual', this)">User manual</a>
+    <a class="nav-tab" onclick="switchPage('tech', this)">Technical reference <span class="nav-badge">DEV</span></a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════
+     QUICK START
+═══════════════════════════════════════════ -->
+<div class="doc-page active" id="page-qs">
+  <div class="qs-hero">
+    <div class="qs-hero-eyebrow">Quick start guide</div>
+    <h1>Get a <em>Harvest Havoc</em> competition running in under 10 minutes</h1>
+    <p class="qs-hero-sub">This guide walks you through everything from adding teams to running your first match. No setup beyond a browser required.</p>
+  </div>
+
+  <div class="qs-body">
+    <div class="qs-steps">
+
+      <div class="qs-step">
+        <div class="qs-step-num">1</div>
+        <div class="qs-step-content">
+          <h3>Name your event</h3>
+          <p>Open the app and go to <strong>⚙ Setup</strong>. Enter your event name (e.g. "MAD Summer Camp 2026"), choose the number of qualification matches per team, and click <strong>Save settings</strong>.</p>
+          <div class="tip-box"><strong>Tip:</strong> The number of teams × matches per team must be divisible by 4 for a perfectly balanced schedule. For 10 teams, use 4 or 8 matches per team.</div>
+        </div>
+      </div>
+
+      <div class="qs-step">
+        <div class="qs-step-num">2</div>
+        <div class="qs-step-content">
+          <h3>Add your teams</h3>
+          <p>Still on Setup, enter each team's number and name and click <strong>+ Add</strong>. You need at least 4 teams. Each team gets a unique color dot for quick identification across the app.</p>
+          <div class="tip-box"><strong>Shortcut:</strong> Click <strong>Load samples</strong> to instantly populate 10 sample teams for testing or demos.</div>
+          <p>Already have a schedule as a CSV file? Paste it into the <strong>Import CSV</strong> box. Each row must be formatted as:<br><code>red1,red2,blue1,blue2</code></p>
+        </div>
+      </div>
+
+      <div class="qs-step">
+        <div class="qs-step-num">3</div>
+        <div class="qs-step-content">
+          <h3>Generate the match schedule</h3>
+          <p>Click <strong>🔄 Generate schedule</strong>. The system creates a balanced round-robin where teams rotate through different alliance partners. The schedule is created fresh — generating again after adding teams will reset all scores.</p>
+          <div class="info-box"><strong>Note:</strong> Generating a new schedule clears all existing match results. Do this before the competition starts, not during.</div>
+        </div>
+      </div>
+
+      <div class="qs-step">
+        <div class="qs-step-num">4</div>
+        <div class="qs-step-content">
+          <h3>Call your first match</h3>
+          <p>Go to <strong>☰ Queue</strong>. You'll see all pending matches listed in order. Click <strong>▶</strong> next to any match to call it to the field. The match appears in the "On field now" panel. The next match automatically populates "On deck".</p>
+          <div class="tip-box"><strong>Tip:</strong> You don't have to go in order. Click ▶ on any match in the queue to jump ahead. Click <strong>↩</strong> to send a match to the back of the queue.</div>
+        </div>
+      </div>
+
+      <div class="qs-step">
+        <div class="qs-step-num">5</div>
+        <div class="qs-step-content">
+          <h3>Run the match</h3>
+          <p>Go to <strong>📋 Score</strong>. Use the scoreboard flow buttons in order:</p>
+          <div class="flow-diagram">
+            <span class="flow-state blue">🎬 Prepare → Live</span>
+            <span class="flow-arrow">→</span>
+            <span class="flow-state green">▶ Start timer</span>
+            <span class="flow-arrow">→ auto ends, pauses →</span>
+            <span class="flow-state yellow">▶ Continue to Tele-op</span>
+            <span class="flow-arrow">→ timer ends →</span>
+            <span class="flow-state red">✓ Submit + Finish →</span>
+          </div>
+          <p>Use the <strong>+</strong> and <strong>−</strong> buttons to enter scores for each alliance as the match progresses. Scores update live on the scoreboard window.</p>
+          <div class="success-box">✓ After Submit + Finish, the scoreboard automatically shows the winner splash for 5 seconds, then the post-match breakdown.</div>
+        </div>
+      </div>
+
+      <div class="qs-step">
+        <div class="qs-step-num">6</div>
+        <div class="qs-step-content">
+          <h3>Set up the scoreboard display</h3>
+          <p>Go to <strong>📺 Scoreboard</strong> and click <strong>Open scoreboard window</strong>. Move that window to your projector or second display and make it fullscreen (<kbd class="kbd">F11</kbd>). The preview panel on this page shows a scaled version of what's on the scoreboard at all times.</p>
+          <div class="tip-box"><strong>Tip:</strong> Enable <strong>Auto-advance</strong> (toggle in the Scoreboard tab) so the display transitions automatically between states as you run each match.</div>
+        </div>
+      </div>
+
+      <div class="qs-step">
+        <div class="qs-step-num">7</div>
+        <div class="qs-step-content">
+          <h3>Save your progress</h3>
+          <p>Click <strong>💾 Save</strong> in the top toolbar at any time. This downloads a <code>.json</code> file with all your teams, schedule, and results. Load it back with <strong>📂 Load</strong> to resume exactly where you left off.</p>
+          <div class="info-box"><strong>Note:</strong> The app also auto-saves to your browser's local storage after every action, so refreshing the page won't lose your data. The exported file is your backup.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="divider"></div>
+
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;letter-spacing:-0.01em">Scoring reference card</h2>
+    <table class="score-table">
+      <thead><tr><th>Scoring action</th><th>Auto</th><th>Tele-op</th><th>End game</th></tr></thead>
+      <tbody>
+        <tr><td>LEAVE (robot left market)</td><td class="pts">5 pts</td><td>—</td><td>—</td></tr>
+        <tr><td>Berry in market</td><td class="pts">12 pts</td><td class="pts">3 pts</td><td>—</td></tr>
+        <tr><td>Apple in market</td><td class="pts">20 pts</td><td class="pts">5 pts</td><td>—</td></tr>
+        <tr><td>Mixed crate in market</td><td>—</td><td class="pts">12 pts</td><td>—</td></tr>
+        <tr><td>Berry crate in market</td><td>—</td><td class="pts">18 pts</td><td>—</td></tr>
+        <tr><td>Apple crate in market</td><td>—</td><td class="pts">24 pts</td><td>—</td></tr>
+        <tr><td>Berry hive in alliance zone</td><td>—</td><td colspan="2" class="pts">Berry crates → 27 pts each</td></tr>
+        <tr><td>Apple hive in alliance zone</td><td>—</td><td colspan="2" class="pts">Apple crates → 36 pts each</td></tr>
+        <tr><td>Climb lower vine</td><td>—</td><td>—</td><td class="pts">30 pts</td></tr>
+        <tr><td>Climb upper vine</td><td>—</td><td>—</td><td class="pts">50 pts</td></tr>
+        <tr><td>Minor foul (received)</td><td colspan="3" class="pts">+5 pts to this alliance</td></tr>
+        <tr><td>Major foul (received)</td><td colspan="3" class="pts">+10 pts to this alliance</td></tr>
+        <tr><td>Red card</td><td colspan="3" style="color:#f87171">Cancels entire alliance score</td></tr>
+      </tbody>
+    </table>
+
+    <div class="divider"></div>
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;letter-spacing:-0.01em">Remote scoring quick setup</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:12px">To score each alliance on a separate device:</p>
+    <ol style="font-size:14px;color:var(--text2);padding-left:20px;line-height:2">
+      <li>Create a free account at <a href="https://jsonbin.io" target="_blank">jsonbin.io</a></li>
+      <li>Create <strong>two bins</strong> — one for red, one for blue. Set each to <code>{"type":"score_update","matchId":null,"side":"red","raw":{},"ts":0}</code></li>
+      <li>In the app go to <strong>📺 Scoreboard → Remote scoring</strong>, paste in both Bin IDs and your Master Key</li>
+      <li>Click <strong>Copy Red scorer link</strong> and send it to the red alliance referee's device</li>
+      <li>Click <strong>Copy Blue scorer link</strong> and send it to the blue alliance referee's device</li>
+      <li>Click <strong>▶ Start polling (main)</strong> on the main device</li>
+    </ol>
+    <div class="tip-box"><strong>Tip:</strong> Each scorer only sees their alliance's panel. Scores sync to the main device every 2 seconds automatically.</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     USER MANUAL
+═══════════════════════════════════════════ -->
+<div class="doc-page" id="page-manual">
+  <div class="manual-layout">
+    <aside class="manual-toc">
+      <div class="toc-section">
+        <div class="toc-section-label">Setup</div>
+        <a class="toc-link" href="#man-event">Event settings</a>
+        <a class="toc-link" href="#man-teams">Team management</a>
+        <a class="toc-link" href="#man-schedule">Schedule generation</a>
+        <a class="toc-link" href="#man-csv">CSV import</a>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-label">Queue</div>
+        <a class="toc-link" href="#man-calling">Calling matches</a>
+        <a class="toc-link" href="#man-skip">Skip & reorder</a>
+        <a class="toc-link" href="#man-extra">Extra matches</a>
+        <a class="toc-link" href="#man-complete">Completing matches</a>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-label">Scoring</div>
+        <a class="toc-link" href="#man-flow">Match flow</a>
+        <a class="toc-link" href="#man-scoring">Score entry</a>
+        <a class="toc-link" href="#man-hives">Hive multipliers</a>
+        <a class="toc-link" href="#man-penalties">Penalties & DQ</a>
+        <a class="toc-link" href="#man-edit">Editing scores</a>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-label">Scoreboard</div>
+        <a class="toc-link" href="#man-sb-states">Display states</a>
+        <a class="toc-link" href="#man-timer">Timer controls</a>
+        <a class="toc-link" href="#man-autoadvance">Auto-advance</a>
+        <a class="toc-link" href="#man-hidescores">Hide scores</a>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-label">Rankings</div>
+        <a class="toc-link" href="#man-rankings">How ranking works</a>
+        <a class="toc-link" href="#man-tiebreak">Tiebreakers</a>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-label">Remote scoring</div>
+        <a class="toc-link" href="#man-remote">Setup</a>
+        <a class="toc-link" href="#man-sync">Sync behavior</a>
+      </div>
+      <div class="toc-section">
+        <div class="toc-section-label">Data</div>
+        <a class="toc-link" href="#man-save">Save & load</a>
+        <a class="toc-link" href="#man-clear">Clearing data</a>
+      </div>
+    </aside>
+
+    <div class="manual-content">
+
+      <h2 id="man-event">Event settings</h2>
+      <p>The event name appears on the scoreboard header and in exported file names. The <strong>qualification matches per team</strong> setting determines how many matches each team plays in the auto-generated schedule. This can be any integer but note that <em>n teams × matches per team</em> must be divisible by 4 for a perfectly balanced schedule — the app will warn you if it isn't achievable.</p>
+
+      <h2 id="man-teams">Team management</h2>
+      <p>Teams are added with a team number (any string — "101", "2996A", "Team 7" are all valid) and a team name. Each team is assigned a unique color dot automatically.</p>
+      <h3>Editing a team</h3>
+      <p>Click the <strong>✏</strong> icon on any team row to edit its number or name inline. Press <kbd class="kbd">Enter</kbd> to save or <kbd class="kbd">Escape</kbd> to cancel. If you change a team number, all references in the match schedule, current match, on-deck match, and sync state are updated automatically.</p>
+      <h3>Removing a team</h3>
+      <p>Click <strong>🗑</strong> and confirm. This removes the team but does not remove their completed match results — historical data is preserved.</p>
+
+      <h2 id="man-schedule">Schedule generation</h2>
+      <p>Clicking <strong>🔄 Generate schedule</strong> builds a balanced round-robin where teams are paired through a greedy algorithm that always picks the team with the fewest matches so far. The algorithm shuffles candidates before picking to vary alliance partners across matches.</p>
+      <div class="tip-box"><strong>Important:</strong> Generating a new schedule resets all match results and clears the current match state. Always generate before competition starts.</div>
+
+      <h2 id="man-csv">CSV import</h2>
+      <p>You can import a pre-built bracket by pasting CSV into the Setup page. Each data row must be exactly: <code>red_team1, red_team2, blue_team1, blue_team2</code>. Lines starting with <code>#</code> are treated as comments and ignored. Imported matches are appended to any existing schedule rather than replacing it.</p>
+
+      <h2 id="man-calling">Calling matches to the field</h2>
+      <p>The Queue page shows all pending matches. The first pending match is highlighted as "Next". Click <strong>▶</strong> on any match row to call it to the field immediately — you are not constrained to go in order. When a match is called, the next pending match automatically moves to "On deck".</p>
+
+      <h2 id="man-skip">Skip & reorder</h2>
+      <p>Click <strong>↩</strong> on any queued match to move it to the end of the pending list. This is useful when a team is not ready. The ↩ button also appears on the "On field now" card to skip the current match mid-flow.</p>
+
+      <h2 id="man-extra">Extra matches</h2>
+      <p>Click <strong>+ Extra</strong> in the Queue header to manually create a match with any four teams. Extra matches are tagged differently from qualification matches in rankings — the Overall rankings tab includes them, the Qual only tab excludes them.</p>
+
+      <h2 id="man-complete">Completing matches</h2>
+      <p>Click <strong>✓ Complete</strong> to mark the current field match as done and advance the queue. If no score has been entered, you'll be prompted to confirm completing with 0-0. The preferred way to complete a match during normal operation is via <strong>Submit + Finish →</strong> on the Score page, which also triggers the scoreboard flow.</p>
+
+      <h2 id="man-flow">Match flow (Score page)</h2>
+      <p>The Score page has a flow bar with three buttons that control both the timer and the scoreboard display state:</p>
+
+      <div class="fn-card">
+        <div class="fn-header"><span class="fn-name">🎬 Prepare → Live</span><span class="fn-tag sb">SCOREBOARD</span></div>
+        <div class="fn-body"><p>Switches the scoreboard to the Live state and locks the live score feed so the display shows 0-0 while you prepare the field. Press this when teams are set up and you're about to start.</p></div>
+      </div>
+
+      <div class="fn-card">
+        <div class="fn-header"><span class="fn-name">▶ Start timer</span><span class="fn-tag timer">TIMER</span></div>
+        <div class="fn-body"><p>Unlocks the live score feed and starts the match timer counting down from 3:00. The timer automatically pauses at 2:40 (when the 20-second autonomous period ends) and displays "PAUSED". Scores entered before and after this point are treated the same — auto vs tele-op is tracked by which score fields you fill in, not by when you tap.</p></div>
+      </div>
+
+      <div class="fn-card">
+        <div class="fn-header"><span class="fn-name">▶ Continue to Tele-op</span><span class="fn-tag timer">TIMER</span></div>
+        <div class="fn-body"><p>Resumes the timer from wherever it paused (typically 2:40) and unlocks the live score feed. Press this after scoring the auto period. The timer will then count down through tele-op and end game, pausing the score feed again when it reaches zero.</p></div>
+      </div>
+
+      <div class="fn-card">
+        <div class="fn-header"><span class="fn-name">✓ Submit + Finish →</span><span class="fn-tag score">SCORE</span></div>
+        <div class="fn-body"><p>Saves the current scores, marks the match as complete, advances the queue, and — if auto-advance is on — transitions the scoreboard through Splash (5 seconds) then Post-match. This is the primary way to end a match.</p></div>
+      </div>
+
+      <div class="fn-card">
+        <div class="fn-header"><span class="fn-name">✓ Submit scores</span><span class="fn-tag score">SCORE</span></div>
+        <div class="fn-body"><p>Saves the current scores without completing the match or advancing the scoreboard. Use this to save mid-match progress or to re-enter scores after reviewing, without triggering the scoreboard transition.</p></div>
+      </div>
+
+      <h2 id="man-scoring">Score entry</h2>
+      <p>The Score page shows two panels side by side — one for each alliance. Use <strong>+</strong> and <strong>−</strong> to increment/decrement each scoring element. Fields that have a maximum (LEAVE, climbs) will not go above their limit. The total score for each alliance updates in real time at the bottom of the page and on the scoreboard window.</p>
+      <p>Scores are broken into sections: <strong>Auto</strong>, <strong>Tele-op fruit</strong>, <strong>Crates</strong>, <strong>Hives</strong>, <strong>End game climbs</strong>, and <strong>Penalties</strong>.</p>
+
+      <h2 id="man-hives">Hive multipliers</h2>
+      <p>Each alliance has two hive checkboxes — Berry hive and Apple hive. When a hive ends the match in the alliance's alliance zone, check the corresponding box. This changes the per-crate point value automatically:</p>
+      <ul>
+        <li><strong>Berry hive in zone:</strong> Berry crates change from 18 pts → <strong>27 pts each</strong></li>
+        <li><strong>Apple hive in zone:</strong> Apple crates change from 24 pts → <strong>36 pts each</strong></li>
+      </ul>
+      <p>The hint text under each crate row updates to reflect the current effective point value, and a <strong>✓HIVE</strong> badge appears next to the crate label when active.</p>
+
+      <h2 id="man-penalties">Penalties & disqualification</h2>
+      <p>Penalties are entered as the number of fouls <em>received by</em> that alliance (i.e. fouls committed by the opposing alliance). Minor fouls add 5 pts, major fouls add 10 pts to the receiving alliance. A <strong>red card</strong> cancels the entire alliance's score to zero — checking this box overrides all other scoring for that alliance.</p>
+
+      <h2 id="man-edit">Editing scores after submission</h2>
+      <p>Go to <strong>🕐 Results</strong>. Every completed match has an <strong>✏</strong> button on the right. Clicking it opens a full score edit modal with the same scoring form pre-populated with the saved values. Save changes and rankings update immediately.</p>
+
+      <h2 id="man-sb-states">Scoreboard display states</h2>
+      <p>The scoreboard has four states, controlled either manually from the Scoreboard tab or automatically via auto-advance:</p>
+      <table class="score-table">
+        <thead><tr><th>State</th><th>What it shows</th></tr></thead>
+        <tbody>
+          <tr><td>📋 Pre-match</td><td>The upcoming match's teams (red and blue alliance), plus the on-deck match below. "PLEASE BRING YOUR ROBOT TO THE FIELD" prompt.</td></tr>
+          <tr><td>▶ Live</td><td>Both alliance scores updating in real time, per-category stat breakdown (berries, apples, crates, climb pts), the match timer, and a live rankings sidebar.</td></tr>
+          <tr><td>🏆 Splash</td><td>Full-screen winner announcement with the winning alliance name in large text, final score, and team numbers. Color-coded background (red/blue/grey for tie).</td></tr>
+          <tr><td>📊 Post-match</td><td>Final scores for both alliances with a full category-by-category breakdown and updated rankings list.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="man-timer">Timer controls</h2>
+      <p>The timer can be controlled manually from the Scoreboard tab regardless of auto-advance:</p>
+      <ul>
+        <li><strong>▶ Start</strong> — begins counting down</li>
+        <li><strong>⏸ Pause</strong> — freezes the timer without locking scores</li>
+        <li><strong>↺ Reset</strong> — returns to the selected duration</li>
+        <li><strong>Mode selector</strong> — Full match (3:00), Auto only (0:20), Tele only (2:40), End game (0:30)</li>
+        <li><strong>Show timer toggle</strong> — hides/shows the timer on the scoreboard without stopping it</li>
+      </ul>
+      <p>When the timer expires, the live score feed is automatically locked (SCORES LOCKED badge appears on scoreboard).</p>
+
+      <h2 id="man-autoadvance">Auto-advance</h2>
+      <p>When the <strong>Auto-advance</strong> toggle is on, the following transitions happen automatically:</p>
+      <div class="flow-diagram" style="flex-direction:column;align-items:flex-start;gap:6px">
+        <div><span class="flow-state blue">Call match to field</span> <span class="flow-arrow">→</span> Scoreboard goes to Pre-match, timer resets</div>
+        <div><span class="flow-state green">🎬 Prepare → Live</span> <span class="flow-arrow">→</span> Scoreboard goes to Live, scores locked</div>
+        <div><span class="flow-state green">▶ Start timer</span> <span class="flow-arrow">→</span> Timer starts, scores unlocked</div>
+        <div><span class="flow-state yellow">Auto ends (2:40)</span> <span class="flow-arrow">→</span> Timer pauses, scores locked</div>
+        <div><span class="flow-state yellow">▶ Continue to Tele-op</span> <span class="flow-arrow">→</span> Timer resumes, scores unlocked</div>
+        <div><span class="flow-state red">Timer reaches 0:00</span> <span class="flow-arrow">→</span> Scores locked</div>
+        <div><span class="flow-state red">Submit + Finish →</span> <span class="flow-arrow">→</span> Splash (5s) → Post-match</div>
+      </div>
+
+      <h2 id="man-hidescores">Hide live scores</h2>
+      <p>The <strong>Hide live scores</strong> toggle in the Scoreboard tab replaces the live score numbers on the display with <code>—</code> dashes. The scores are still being tracked and calculated — this is purely cosmetic for situations where you don't want the audience to see the running total mid-match.</p>
+
+      <h2 id="man-rankings">How ranking works</h2>
+      <p>Teams are ranked by wins first, then total accumulated points, then opponent points (as a tiebreaker), then highest single-match score. The <strong>Overall</strong> tab includes all match types. The <strong>Qual only</strong> tab excludes extra matches.</p>
+      <p>Each team accumulates the alliance score from every match they play in. There are no score drops in this system.</p>
+
+      <h2 id="man-tiebreak">Tiebreakers</h2>
+      <p>When two teams have the same number of wins, the tiebreaker order is:</p>
+      <ol>
+        <li>Higher total points accumulated across all matches</li>
+        <li>Lower opponent points (teams that won against higher-scoring opponents rank higher)</li>
+        <li>Higher single-match high score</li>
+      </ol>
+
+      <h2 id="man-remote">Remote scoring setup</h2>
+      <p>Remote scoring lets one referee per alliance score on their own phone or tablet. It requires a free account at <a href="https://jsonbin.io" target="_blank">jsonbin.io</a>.</p>
+      <ol>
+        <li>Create two bins at JSONBin — one for red, one for blue</li>
+        <li>Set each bin's initial content to <code>{"type":"score_update","matchId":null,"side":"red","raw":{},"ts":0}</code> (change <code>"side"</code> to <code>"blue"</code> for the blue bin)</li>
+        <li>In the app, go to Scoreboard → Remote scoring and paste both Bin IDs and your Master Key</li>
+        <li>Click <strong>Copy Red scorer link</strong> — this generates a URL with the credentials embedded. Send to the red scorer</li>
+        <li>Click <strong>Copy Blue scorer link</strong> — send to the blue scorer</li>
+        <li>Click <strong>▶ Start polling</strong> on the main device</li>
+      </ol>
+
+      <h2 id="man-sync">Sync behavior</h2>
+      <p>When a scorer opens their link, they see only their alliance's scoring panel. Every time they tap + or −, their scores are pushed to their bin. The main device polls both bins every 2 seconds and merges the incoming scores into its own form, updating the live totals and the scoreboard display.</p>
+      <p>Two separate bins are used so red and blue can push simultaneously without overwriting each other's data.</p>
+      <div class="tip-box"><strong>Limitation:</strong> The free JSONBin tier allows 10,000 requests per month. At a 2-second poll rate on the main device (pulling from 2 bins), you use ~86,400 requests per day of competition. Consider increasing the poll interval for longer events.</div>
+
+      <h2 id="man-save">Save & load</h2>
+      <p>Click <strong>💾 Save</strong> to download a <code>.json</code> file containing all state: event settings, teams, match schedule, results, and dark mode preference. Click <strong>📂 Load</strong> to restore from a saved file. The app also writes to browser local storage after every change as a safety net.</p>
+
+      <h2 id="man-clear">Clearing data</h2>
+      <p>The <strong>🗑 Clear</strong> button in the header opens a menu with three options:</p>
+      <ul>
+        <li><strong>Clear all scores</strong> — resets every match to "pending" and removes all results. Teams and schedule are preserved.</li>
+        <li><strong>Clear schedule + scores</strong> — removes all matches and results. Teams are preserved.</li>
+        <li><strong>Clear everything</strong> — full reset. Only event settings are preserved.</li>
+      </ul>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     TECHNICAL REFERENCE
+═══════════════════════════════════════════ -->
+<div class="doc-page" id="page-tech">
+  <div class="tech-content">
+
+    <div class="section-eyebrow">Technical reference</div>
+    <h1 class="section-title" style="margin-bottom:8px">Harvest Havoc Event System — Developer Documentation</h1>
+    <p style="color:var(--text2);font-size:14px;margin-bottom:32px">Architecture overview, data model, function reference, and extension guide for anyone modifying the codebase.</p>
+
+    <h2 id="tech-arch">Architecture overview</h2>
+    <p>The entire application is a single self-contained HTML file with no build step, no framework, and no server. All logic runs in the browser. The file is structured as:</p>
+    <div class="arch-grid">
+      <div class="arch-card"><h4>HTML structure</h4><p>Semantic page divs controlled by visibility. Each "tab" is a <code>.page</code> div shown/hidden by the <code>P()</code> router.</p></div>
+      <div class="arch-card"><h4>CSS custom properties</h4><p>All colors and spacing use CSS variables in <code>:root</code> and <code>[data-dark="1"]</code> overrides. Dark mode is toggled by setting <code>data-dark</code> on <code>#app</code>.</p></div>
+      <div class="arch-card"><h4>State object S</h4><p>A single global <code>S</code> object holds all app state. <code>save()</code> serializes it to localStorage. Every mutation calls <code>save()</code>.</p></div>
+      <div class="arch-card"><h4>Scoreboard renderer</h4><p><code>buildSBHTML(payload)</code> is a pure function: payload in, HTML string out. Used both for the inline preview and the separate window.</p></div>
+    </div>
+
+    <h2 id="tech-state">State object</h2>
+    <p>The global <code>S</code> object is the single source of truth. Its shape:</p>
+    <table class="var-table">
+      <thead><tr><th>Key</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>S.event</td><td>object</td><td>name, twPer (matches per team)</td></tr>
+        <tr><td>S.teams</td><td>Team[]</td><td>Array of {num, name, color}</td></tr>
+        <tr><td>S.matches</td><td>Match[]</td><td>All matches — see Match shape below</td></tr>
+        <tr><td>S.results</td><td>Result[]</td><td>Completed match scores — see Result shape below</td></tr>
+        <tr><td>S.currentMatch</td><td>Match|null</td><td>Match currently on the field</td></tr>
+        <tr><td>S.onDeckMatch</td><td>Match|null</td><td>Next match in queue</td></tr>
+        <tr><td>S.darkMode</td><td>bool|null</td><td>null = follow OS preference</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Match shape</h3>
+    <pre>{
+  id:     string,        // 'Q1', 'E3', etc.
+  num:    number,        // display number
+  type:   'qual'|'extra',
+  red:    string[],      // [teamNum, teamNum]
+  blue:   string[],      // [teamNum, teamNum]
+  status: 'pending'|'done'
+}</pre>
+
+    <h3>Result shape</h3>
+    <pre>{
+  matchId:   string,     // references Match.id
+  redScore:  number,
+  blueScore: number,
+  raw: {
+    red:  RawScore,
+    blue: RawScore
+  },
+  ts: number             // Date.now() timestamp
+}</pre>
+
+    <h3>RawScore shape</h3>
+    <pre>{
+  auto_leave:  number,   // 0-2
+  auto_berry:  number,
+  auto_apple:  number,
+  tele_berry:  number,
+  tele_apple:  number,
+  cr_mixed:    number,
+  cr_berry:    number,
+  cr_apple:    number,
+  hive_berry:  boolean,
+  hive_apple:  boolean,
+  climb_lo:    number,   // 0-2
+  climb_hi:    number,   // 0-2
+  minor_foul:  number,
+  major_foul:  number,
+  redcard:     boolean
+}</pre>
+
+    <h2 id="tech-scoring">Scoring formula</h2>
+    <p>Implemented in <code>calcD(ctx, side)</code>. The formula is:</p>
+    <pre>score =
+  auto_leave  × 5  +
+  auto_berry  × 12 +
+  auto_apple  × 20 +
+  tele_berry  × 3  +
+  tele_apple  × 5  +
+  cr_mixed    × 12 +
+  cr_berry    × (hive_berry ? 27 : 18) +
+  cr_apple    × (hive_apple ? 36 : 24) +
+  climb_lo    × 30 +
+  climb_hi    × 50 +
+  minor_foul  × 5  +
+  major_foul  × 10
+
+if (redcard) score = 0</pre>
+
+    <p><code>ctx</code> is either <code>'main'</code> (live score page) or <code>'edit'</code> (edit modal). This namespaces the DOM element IDs so both forms can exist simultaneously without collision. Element IDs follow the pattern <code>${ctx}_${side}_${key}</code>.</p>
+
+    <h2 id="tech-sb">Scoreboard renderer</h2>
+    <p><code>buildSBHTML(payload)</code> is a pure function that takes a payload object and returns a complete HTML string. It is used in two places:</p>
+    <ul>
+      <li><code>updSBPrev()</code> — sets <code>innerHTML</code> of the preview div on the Scoreboard control page</li>
+      <li>The scoreboard window's <code>receivePayload(p)</code> — sets <code>innerHTML</code> of the root div in the popup window</li>
+    </ul>
+    <p>Because the function is serialized into the popup window via <code>buildSBWinHTML()</code> using <code>.toString()</code>, it must be a pure function with no references to outer scope variables except <code>SC()</code> (the stat card helper). Any utility functions it calls must also be serialized or inlined.</p>
+
+    <h3>Payload shape</h3>
+    <pre>{
+  state:      'pre'|'live'|'splash'|'post',
+  ev:         string,           // event name
+  cur:        MatchView|null,   // current match with team objects
+  nxt:        MatchView|null,   // on-deck match
+  nxt2:       MatchView|null,   // match after on-deck
+  result:     ResultView|null,  // current match result
+  lastRes:    ResultView|null,  // last completed result (for splash/post)
+  lR:         number,           // live red score (from DOM)
+  lB:         number,           // live blue score (from DOM)
+  lRaw:       {red, blue},      // live raw scores
+  livePaused: boolean,
+  hideScores: boolean,
+  tmr: {
+    v:    number,               // seconds remaining
+    mx:   number,               // timer max
+    run:  boolean,
+    en:   boolean,              // show timer on display
+    fmt:  string,               // '2:40'
+    per:  string                // 'AUTONOMOUS' | 'TELE-OPERATED' | 'END GAME'
+  },
+  ranks: TeamStat[]
+}</pre>
+
+    <h2 id="tech-sync">Remote sync system</h2>
+    <p>The sync system uses two JSONBin bins (one per alliance) as a cloud clipboard. The scorer device writes to its bin; the main device polls both bins.</p>
+
+    <div class="state-diagram">SCORER DEVICE (red)                JSONBIN (red bin)           MAIN DEVICE
+─────────────────────────────────────────────────────────────────────────────
+adj() called
+  └─ syncPush({side:'red', raw})  ──PUT──▶  bin overwrites        polls every 2s
+                                                                    └─ syncPull(redBin)
+                                                                    └─ syncPull(blueBin)
+                                                                    └─ merge into DOM
+                                                                    └─ recalc('main')
+                                                                    └─ pushSBLive()</div>
+
+    <p>Key design decisions:</p>
+    <ul>
+      <li>Two bins prevent race conditions — red and blue never write to the same bin</li>
+      <li><code>syncPush</code> does a direct PUT (no read-modify-write), so it's a single atomic operation</li>
+      <li>The main device uses <code>Promise.all</code> to pull both bins in parallel each poll cycle</li>
+      <li>The scorer device detects its role from URL params set by <code>copyScorerLink()</code></li>
+      <li>Scorer role is detected in an IIFE at script start, before <code>initUI()</code>, so it's set before any rendering occurs</li>
+    </ul>
+
+    <h2 id="tech-timer">Timer implementation</h2>
+    <p>The timer uses <code>setInterval</code> with a 1-second tick. On each tick it decrements <code>tmrVal</code> and calls <code>pushSBTmr()</code> to update the scoreboard. Auto-pause logic:</p>
+    <pre>// Inside tmrStart() setInterval callback:
+if (tmrVal === 160 && tmrMax === 180) {
+  // Auto period just ended — pause
+  clearInterval(tmrInt);
+  tmrRun = false;
+  pushSBTmr();
+  return;
+}</pre>
+    <p>The <code>tmrMax === 180</code> guard ensures auto-pause only fires in full-match mode. When running auto-only mode (tmrMax = 20) it counts straight to zero.</p>
+    <p><strong>Known limitation:</strong> <code>setInterval</code> is not guaranteed to fire at exactly 1000ms in all browser conditions (tab backgrounding, heavy CPU load). For competition-critical timing, consider using <code>Date.now()</code> deltas instead of a tick counter.</p>
+
+    <h2 id="tech-router">Page router</h2>
+    <pre>function P(id) {
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  // Show target
+  document.getElementById('page-' + id).classList.add('active');
+  // Update nav button active state
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  [...document.querySelectorAll('.nav-btn')]
+    .find(b => b.getAttribute('onclick') === `P('${id}')`)
+    ?.classList.add('active');
+  // Page-specific render
+  if (id === 'queue') renderQueue();
+  if (id === 'score') renderScore();
+  // ...etc
+}</pre>
+    <p>All render functions are called on navigation, not on data change, except for functions that push to the scoreboard (<code>pushSB()</code>, <code>pushSBLive()</code>), which are called from mutation sites.</p>
+
+    <h2 id="tech-darkmode">Dark mode</h2>
+    <p>Dark mode is implemented entirely with CSS custom property overrides. The <code>[data-dark="1"]</code> selector on <code>#app</code> redefines all <code>:root</code> variables. Toggling dark mode only requires setting that attribute — no class changes, no style recalculation beyond what the browser does naturally.</p>
+    <pre>// Three-state logic:
+// S.darkMode === null  → follow OS (matchMedia listener)
+// S.darkMode === true  → always dark
+// S.darkMode === false → always light
+
+function initDark() {
+  S.darkMode === null
+    ? applyDark(window.matchMedia('(prefers-color-scheme:dark)').matches)
+    : applyDark(S.darkMode);
+}</pre>
+
+    <h2 id="tech-extending">Adding a new scoring element</h2>
+    <p>To add a new scoring field (e.g. a new game piece type), you need to touch four places:</p>
+    <ol>
+      <li><strong>RawScore shape</strong> — add the new key (e.g. <code>new_piece: number</code>)</li>
+      <li><strong><code>bPanel()</code></strong> — add a <code>.si</code> row with the counter and <code>adj()</code> call</li>
+      <li><strong><code>calcD()</code></strong> — add the scoring formula line</li>
+      <li><strong><code>buildSBHTML()</code></strong> — add it to the live breakdown or post-match row function if you want it visible on the scoreboard</li>
+    </ol>
+    <p>The <code>doSubmit()</code> and <code>saveScores()</code> functions call <code>calcD()</code> which reads from DOM, so they don't need changing — they'll pick up the new field automatically.</p>
+
+    <h2 id="tech-extend-sync">Extending the sync system</h2>
+    <p>To change the sync backend from JSONBin to something else (e.g. Firebase Realtime Database, Supabase, or a custom WebSocket server), you only need to replace two functions:</p>
+    <pre>async function syncPush(payload) {
+  // Write payload to your backend for payload.side ('red' or 'blue')
+}
+
+async function syncPull(binId) {
+  // Read and return the stored record for the given channel ID
+  // Return null on failure
+}</pre>
+    <p>Everything else — the poll loop, DOM merging, scorer role detection — is backend-agnostic and doesn't need to change.</p>
+
+    <h2 id="tech-localstorage">Local storage</h2>
+    <p>The app uses <code>localStorage</code> key <code>'hhf'</code>. On load it falls back to older keys <code>'hh_v3'</code>, <code>'hh_v2'</code>, <code>'hh_v1'</code> for migration. The stored value is <code>JSON.stringify(S)</code>. There is no schema versioning — if you add new fields to <code>S</code>, add defaults in the <code>load()</code> function's fallback logic.</p>
+
+    <h2 id="tech-knownissues">Known issues & limitations</h2>
+    <ul>
+      <li><strong>Timer drift:</strong> <code>setInterval</code> can drift under load. Use Date.now() deltas for production precision.</li>
+      <li><strong>JSONBin rate limits:</strong> Free tier is 10k requests/month. At 2s poll + 2 bins = ~86k/day. Increase <code>JSONBIN.pollMs</code> for longer events.</li>
+      <li><strong>Popup blockers:</strong> The scoreboard window uses <code>window.open()</code>. Some browsers block this unless triggered directly by a user click. The Open button is a click handler, so it should work — but browser extensions may interfere.</li>
+      <li><strong>Scoreboard window reload:</strong> If the scoreboard window is reloaded, it loses its <code>receivePayload</code> reference. Close and re-open from the main device.</li>
+      <li><strong>Single localStorage key:</strong> Multiple events in the same browser share state. Use the Save/Load file system for managing multiple events.</li>
+    </ul>
+
+  </div>
+</div>
+
+<script>
+function switchPage(id, el) {
+  document.querySelectorAll('.doc-page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>
