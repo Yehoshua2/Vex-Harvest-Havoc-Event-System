@@ -160,12 +160,13 @@ tr:hover td{background:var(--bg)}
         <div class="ch">📅 Event setup</div>
         <div class="al al-i" style="font-size:10px">2v2 alliance matches. Red vs Blue. Each alliance scores independently.</div>
         <div class="lb">Event name</div><input id="ev-name" placeholder="MAD Summer Camp 2026">
-        <div class="lb">Qual matches per team</div><input id="tw-per" type="number" value="5" min="1" max="30">
+        <div class="lb">Qual matches per team</div><input id="tw-per" type="number" value="5" min="1" max="30" onchange="checkGen()">
         <div class="mt6"><button class="btn btn-r w100" onclick="saveEvent()">✓ Save</button></div>
         <div id="ev-st" style="margin-top:5px"></div>
       </div>
       <div class="card" style="margin-bottom:11px">
         <div class="ch">🔄 Generate schedule</div>
+        <div id="gen-note" style="font-size:10px;margin-top:5px"></div>
         <p style="font-size:11px;color:var(--text2);margin-bottom:8px">Balanced schedule, any team count ≥4.</p>
         <button class="btn btn-g w100" id="gen-btn" disabled onclick="genSched()">🔄 Generate</button>
         <div id="gen-st" style="margin-top:5px"></div>
@@ -236,6 +237,7 @@ tr:hover td{background:var(--bg)}
         <span style="font-size:11px;font-weight:700;color:var(--gold-t)">📺 Scoreboard:</span>
         <button class="btn btn-sm btn-p" onclick="flowPrepare()">🎬 Prepare → Live</button>
         <button class="btn btn-sm btn-g" onclick="flowStartTimer()">▶ Start timer</button>
+        <button class="btn btn-sm btn-g" onclick="flowContinueToTele()">▶ Continue to Tele-op</button>
         <span id="flow-st" style="font-size:10px;color:var(--gold-t)"></span>
       </div>
     </div>
@@ -553,7 +555,33 @@ function renderTeams(){const el=document.getElementById('tlist');document.getEle
 function loadSamples(){S.teams=[{num:'101',name:'Iron Wolves'},{num:'202',name:'Circuit Breakers'},{num:'303',name:'Neon Gears'},{num:'404',name:'Robo Rangers'},{num:'505',name:'Quantum Bots'},{num:'606',name:'Steel Falcons'},{num:'707',name:'Tech Titans'},{num:'808',name:'Sparks Inc.'},{num:'909',name:'Binary Squad'},{num:'1010',name:'Omega Drive'}].map((t,i)=>({...t,color:COLORS[i%COLORS.length]}));save();renderTeams();checkGen();}
 
 /* Schedule */
-function genSched(){if(S.teams.length<4){alert('Need ≥4 teams');return;}const nums=S.teams.map(t=>t.num),tgt=S.event.twPer,mxs=[],cnts={};nums.forEach(n=>{cnts[n]=0;});let att=0;while(nums.some(n=>cnts[n]<tgt)&&att<6000){att++;const el=nums.filter(n=>cnts[n]<tgt);if(el.length<4)break;el.sort((a,b)=>cnts[a]-cnts[b]);const pool=el.slice(0,Math.max(4,Math.ceil(el.length*.6)));for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}const p=[],used=new Set();for(let i=0;i<pool.length&&p.length<4;i++){if(!used.has(pool[i])){p.push(pool[i]);used.add(pool[i]);}}if(p.length<4)break;mxs.push({id:'Q'+(mxs.length+1),num:mxs.length+1,type:'qual',red:[p[0],p[1]],blue:[p[2],p[3]],status:'pending'});p.forEach(n=>cnts[n]++);}S.matches=mxs;S.results=[];S.currentMatch=null;S.onDeckMatch=null;save();ss('gen-st',`Generated ${mxs.length} matches!`,'s');}
+function genSched() {
+  if (S.teams.length < 4) { alert('Need at least 4 teams'); return; }
+  const nums = S.teams.map(t => t.num), tgt = S.event.twPer;
+  const mxs = [], cnts = {};
+  nums.forEach(n => { cnts[n] = 0; });
+  let att = 0;
+  while (nums.some(n => cnts[n] < tgt) && att < 6000) {
+    att++;
+    const el = nums.filter(n => cnts[n] < tgt);
+    if (el.length < 4) break;
+    el.sort((a, b) => cnts[a] - cnts[b]);
+    const pool = el.slice(0, Math.max(4, Math.ceil(el.length * .6)));
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const p = [], used = new Set();
+    for (let i = 0; i < pool.length && p.length < 4; i++) {
+      if (!used.has(pool[i])) { p.push(pool[i]); used.add(pool[i]); }
+    }
+    if (p.length < 4) break;
+    mxs.push({ id: 'Q' + (mxs.length + 1), num: mxs.length + 1, type: 'qual', red: [p[0], p[1]], blue: [p[2], p[3]], status: 'pending' });
+    p.forEach(n => cnts[n]++);
+  }
+  S.matches = mxs; S.results = []; S.currentMatch = null; S.onDeckMatch = null;
+  save(); ss('gen-st', `Generated ${mxs.length} matches for ${nums.length} teams!`, 's');
+}
 function importCSV(){const raw=document.getElementById('csv-in').value.trim();if(!raw){alert('Paste CSV first');return;}const added=[];raw.split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#')).forEach(line=>{const c=line.split(',').map(x=>x.trim()).filter(Boolean);if(c.length>=4)added.push({id:'Q'+(S.matches.length+added.length+1),num:S.matches.length+added.length+1,type:'qual',red:[c[0],c[1]],blue:[c[2],c[3]],status:'pending'});});if(!added.length){ss('csv-st','No valid rows','d');return;}S.matches=[...S.matches,...added];save();ss('csv-st',`Imported ${added.length} matches!`,'s');document.getElementById('csv-in').value='';}
 function openAddMatch(){const opts=S.teams.map(t=>`<option value="${t.num}">${t.num} – ${t.name}</option>`).join('');['ar1','ar2','ab1','ab2'].forEach(id=>document.getElementById(id).innerHTML=opts);OM('am-modal');}
 function confirmAM(){const r1=document.getElementById('ar1').value,r2=document.getElementById('ar2').value,b1=document.getElementById('ab1').value,b2=document.getElementById('ab2').value;if(new Set([r1,r2,b1,b2]).size<4){alert('All 4 must differ');return;}S.matches.push({id:'E'+(S.matches.length+1),num:S.matches.length+1,type:'extra',red:[r1,r2],blue:[b1,b2],status:'pending'});save();CM('am-modal');renderQueue();}
@@ -1094,6 +1122,18 @@ function toggleHideScores() {
   pushSB();
   // Store it so buildSBHTML can read it
   window.sbHideScores = !!hide;
+}
+
+function flowContinueToTele() {
+  // Resume timer from wherever it paused (should be at 160 after auto)
+  // If somehow it's still at 180 just start it normally
+  livePaused = false;
+  const lp = document.getElementById('lp-tog');
+  if (lp) lp.checked = false;
+  tmrStart();
+  const fs = document.getElementById('flow-st');
+  if (fs) fs.textContent = 'Tele-op running!';
+  pushSBLive();
 }
 </script>
 </body></html>
