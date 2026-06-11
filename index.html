@@ -282,6 +282,27 @@ tr:hover td{background:var(--bg)}
       <button class="sbbtn" id="stb-splash" onclick="setSBState('splash')">🏆 Splash</button>
       <button class="sbbtn" id="stb-post" onclick="setSBState('post')">📊 Post</button>
     </div>
+    <div class="card" style="margin-bottom:12px;border-color:#7C3AED;background:var(--purple-bg,var(--blue-bg))">
+  <div class="ch">🔗 Remote scoring setup</div>
+  <div class="al al-i" style="font-size:10px;margin-bottom:10px">
+    Lets referees score each alliance on their own phone/tablet.
+    Requires a free <a href="https://jsonbin.io" target="_blank" style="color:var(--blue)">JSONBin.io</a> account.
+    Create a bin, paste your Bin ID and API key below, then share the Red/Blue links with your scorers.
+  </div>
+  <div class="lb">JSONBin Bin ID — Red alliance</div>
+<input id="jb-binid-red" placeholder="Red bin ID" oninput="updateJSONBin()">
+<div class="lb">JSONBin Bin ID — Blue alliance</div>
+<input id="jb-binid-blue" placeholder="Blue bin ID" oninput="updateJSONBin()">
+<div class="lb">JSONBin Master Key (same for both)</div>
+<input id="jb-apikey" placeholder="$2a$10$..." type="password" oninput="updateJSONBin()">
+  <div class="flex gap6 mt6" style="flex-wrap:wrap">
+    <button class="btn btn-r btn-sm" onclick="copyScorerLink('red')">📋 Copy Red scorer link</button>
+    <button class="btn btn-b btn-sm" onclick="copyScorerLink('blue')">📋 Copy Blue scorer link</button>
+    <button class="btn btn-g btn-sm" onclick="startSyncPoll()">▶ Start polling (main)</button>
+    <button class="btn btn-sm" onclick="stopSyncPoll()">■ Stop polling</button>
+  </div>
+  <div id="sync-st" style="margin-top:6px;font-size:11px;color:var(--text2)"></div>
+  </div>
     <div class="sbr">
       <span style="font-size:11px;font-weight:600;color:var(--text)">Timer:</span>
       <button class="btn btn-g btn-sm" onclick="tmrStart()">▶ Start</button>
@@ -360,6 +381,119 @@ tr:hover td{background:var(--bg)}
 
 <script>
 const COLORS=['#B91C1C','#1D4ED8','#15803D','#7C3AED','#D97706','#0E7490','#BE185D','#4338CA','#047857','#B45309','#9333EA','#0369A1','#92400E','#1e3a8a'];
+// ===== JSONBIN SYNC =====
+// Get a free bin at https://jsonbin.io — create account, make a bin, copy the bin ID and API key
+const JSONBIN = {
+  binIdRed: '',     // bin ID for red alliance scores
+  binIdBlue: '',    // bin ID for blue alliance scores  
+  apiKey: '',       // same master key works for both
+  pollMs: 5000,
+};
+let syncRole = 'main';   // 'main' | 'red' | 'blue'
+let syncPollInterval = null;
+let lastSyncEtag = null;
+
+async function syncPush(payload) {
+  console.log('syncPush called', payload, 'binIdRed:', JSONBIN.binIdRed, 'binIdBlue:', JSONBIN.binIdBlue, 'apiKey:', JSONBIN.apiKey?.slice(0,10));
+  const binId = payload.side === 'red' ? JSONBIN.binIdRed : JSONBIN.binIdBlue;
+  console.log('using binId:', binId);
+  if (!binId || !JSONBIN.apiKey) {
+    console.warn('syncPush bailed — missing binId or apiKey');
+    return;
+  }
+  try {
+    await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN.apiKey,
+        'X-Bin-Versioning': 'false'
+      },
+      body: JSON.stringify({
+        type: 'score_update',
+        matchId: payload.matchId,
+        side: payload.side,
+        raw: payload.raw,
+        ts: payload.ts
+      })
+    });
+  } catch(e) { console.warn('syncPush failed', e); }
+}
+
+async function syncPull(binId) {
+  const bid = binId || JSONBIN.binIdRed;
+  if (!bid || !JSONBIN.apiKey) return null;
+  try {
+    const r = await fetch(`https://api.jsonbin.io/v3/b/${bid}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN.apiKey }
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    return data.record;
+  } catch(e) { return null; }
+}
+
+function startSyncPoll() {
+  if (syncPollInterval) clearInterval(syncPollInterval);
+  if (syncRole === 'main') {
+    syncPollInterval = setInterval(async () => {
+      if (!S.currentMatch) return;
+      const m = S.currentMatch;
+
+      // Poll red and blue bins independently — no collision possible
+      const [recRed, recBlue] = await Promise.all([
+        syncPull(JSONBIN.binIdRed),
+        syncPull(JSONBIN.binIdBlue)
+      ]);
+
+      [recRed, recBlue].forEach(rec => {
+        if (!rec || rec.type !== 'score_update') return;
+        if (rec.matchId && rec.matchId !== m.id) return;
+        const side = rec.side;
+        const raw = rec.raw;
+        if (!side || !raw) return;
+        const testEl = document.getElementById(`main_${side}_auto_leave`);
+        if (!testEl) return;
+        Object.keys(raw).forEach(k => {
+          const el = document.getElementById(`main_${side}_${k}`);
+          if (!el) return;
+          if (el.type === 'checkbox') el.checked = !!raw[k];
+          else el.textContent = raw[k] || 0;
+        });
+        recalc('main');
+      });
+    }, JSONBIN.pollMs);
+  }
+}
+
+function updateJSONBin() {
+  JSONBIN.binIdRed = document.getElementById('jb-binid-red')?.value.trim() || '';
+  JSONBIN.binIdBlue = document.getElementById('jb-binid-blue')?.value.trim() || '';
+  JSONBIN.apiKey = document.getElementById('jb-apikey')?.value.trim() || '';
+}
+
+function copyScorerLink(side) {
+  const binId = side === 'red' ? JSONBIN.binIdRed : JSONBIN.binIdBlue;
+  if (!binId || !JSONBIN.apiKey) {
+    alert(`Enter the ${side} Bin ID and API key first`);
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set('scorer', side);
+  url.searchParams.set('binId', binId);
+  url.searchParams.set('apiKey', JSONBIN.apiKey);
+  navigator.clipboard.writeText(url.toString()).then(() => {
+    document.getElementById('sync-st').textContent =
+      `✓ ${side.toUpperCase()} scorer link copied!`;
+    setTimeout(() => { document.getElementById('sync-st').textContent = ''; }, 3000);
+  });
+}
+
+function stopSyncPoll() {
+  if (syncPollInterval) clearInterval(syncPollInterval);
+  syncPollInterval = null;
+}
+
 let S={event:{name:'',twPer:5},teams:[],matches:[],results:[],currentMatch:null,onDeckMatch:null,darkMode:null};
 let editMID=null,editTeam=null,sbWin=null,sbState='pre',livePaused=false;
 let tmrVal=180,tmrMax=180,tmrRun=false,tmrInt=null,tmrEnabled=true;
@@ -451,6 +585,17 @@ function flowStartTimer(){livePaused=false;const e=document.getElementById('lp-t
 function renderScore(){
   const none=document.getElementById('sc-none'),wrap=document.getElementById('sc-wrap');
   if(!S.currentMatch){none.style.display='';wrap.style.display='none';return;}
+  // On scorer devices, show the form even without a current match loaded
+  // (they score live and push; main device owns match state)
+  if (syncRole !== 'main' && !S.currentMatch) {
+    none.style.display = 'none';
+    wrap.style.display = '';
+    document.getElementById('sc-ttl').textContent = syncRole.toUpperCase() + ' SCORER';
+    document.getElementById('sc-sub').textContent = 'Waiting for match to be called on main device...';
+    document.getElementById('sc-body').innerHTML = bForm('main', {});
+    recalc('main');
+    return; // skip the rest, don't try to read S.currentMatch
+  }
   none.style.display='none';wrap.style.display='';
   const m=S.currentMatch;
   document.getElementById('sc-ttl').textContent=`Match ${m.num}`;
@@ -459,6 +604,35 @@ function renderScore(){
   document.getElementById('sc-body').innerHTML=bForm('main',ex?.raw||{});
   recalc('main');
   const fs=document.getElementById('flow-st');if(fs)fs.textContent='';
+  // Re-apply scorer role restrictions after every render
+  if (syncRole !== 'main') {
+    const otherSide = syncRole === 'red' ? 'blue' : 'red';
+    const body = document.getElementById('sc-body');
+    if (body) {
+      // Hide the other alliance's panel
+      const grid = body.querySelector('.g2');
+      if (grid) {
+        const panels = grid.children;
+        if (syncRole === 'red' && panels[1]) panels[1].style.display = 'none';
+        if (syncRole === 'blue' && panels[0]) panels[0].style.display = 'none';
+      }
+    }
+    // Hide the other alliance's total box
+    const totR = document.getElementById('tot-r');
+    const totB = document.getElementById('tot-b');
+    if (syncRole === 'red' && totB) totB.closest('.tot')?.style.setProperty('display','none');
+    if (syncRole === 'blue' && totR) totR.closest('.tot')?.style.setProperty('display','none');
+    // Hide the flow bar (not needed on scorer devices)
+    document.querySelectorAll('.card').forEach(c => {
+      if (c.style.borderColor?.includes('gold') || c.innerHTML.includes('Scoreboard:')) {
+        c.style.display = 'none';
+      }
+    });
+    // Hide the Submit + Finish button (only main device should advance state)
+    document.querySelectorAll('.btn-p').forEach(b => {
+      if (b.textContent.includes('Finish')) b.style.display = 'none';
+    });
+  }
 }
 
 function bForm(ctx,raw){return`<div class="g2" style="gap:12px;align-items:start">${bPanel(ctx,'red','🔴 Red Alliance',raw.red||{})}${bPanel(ctx,'blue','🔵 Blue Alliance',raw.blue||{})}</div>`;}
@@ -491,7 +665,25 @@ function bPanel(ctx,side,title,r){
   </div>`;
 }
 
-function adj(ctx,side,key,d,max){const el=document.getElementById(`${ctx}_${side}_${key}`);if(!el)return;el.textContent=Math.max(0,Math.min(max||999,parseInt(el.textContent||0)+d));recalc(ctx);if(!livePaused&&ctx==='main')pushSBLive();}
+function adj(ctx,side,key,d,max){
+  const el=document.getElementById(`${ctx}_${side}_${key}`);
+  if(!el)return;el.textContent=Math.max(0,Math.min(max||999,parseInt(el.textContent||0)+d));
+  recalc(ctx);
+  // If we're a remote scoring device, push our alliance's scores
+  if (syncRole !== 'main' && ctx === 'main') {
+    const mySide = syncRole; // 'red' or 'blue'
+    if (side === mySide) {
+      const raw = calcD(ctx, side).raw;
+      syncPush({
+        type: 'score_update',
+        matchId: S.currentMatch?.id,
+        side: mySide,
+        raw,
+        ts: Date.now()
+      });
+    }
+  }
+  if(!livePaused&&ctx==='main')pushSBLive();}
 function gV(ctx,side,k){return parseInt(document.getElementById(`${ctx}_${side}_${k}`)?.textContent||0);}
 function gC(ctx,side,k){return document.getElementById(`${ctx}_${side}_${k}`)?.checked||false;}
 function calcD(ctx,side){
@@ -510,6 +702,17 @@ function recalc(ctx){
     const bch=document.getElementById(`${ctx}_${side}_bch`);if(bch)bch.textContent=bcp+' pts each';
     const ach=document.getElementById(`${ctx}_${side}_ach`);if(ach)ach.textContent=acp+' pts each';
   });
+  // Remote devices push on every recalc too (covers checkbox changes)
+  if (syncRole !== 'main' && ctx === 'main' && S.currentMatch) {
+    const raw = calcD(ctx, syncRole).raw;
+    syncPush({
+      type: 'score_update',
+      matchId: S.currentMatch.id,
+      side: syncRole,
+      raw,
+      ts: Date.now()
+    });
+  }
   if(!livePaused&&ctx==='main')pushSBLive();
 }
 function saveScores(ctx,mid){
@@ -781,10 +984,70 @@ function buildSBWinHTML(){
 }
 
 function initUI(){
+  console.log('syncRole is:', syncRole, 'params:', window.location.search);
   renderTeams();checkGen();
   if(S.event.name){document.getElementById('ev-badge').textContent=S.event.name;document.getElementById('ev-name').value=S.event.name;}
   if(S.event.twPer)document.getElementById('tw-per').value=S.event.twPer;
   updSBBtns();
+  // Check if opened as a remote scorer
+  const params = new URLSearchParams(window.location.search);
+const scorer = params.get('scorer');
+if (scorer === 'red' || scorer === 'blue') {
+  syncRole = scorer;
+  JSONBIN.binIdRed = scorer === 'red' ? (params.get('binId') || '') : '';
+  JSONBIN.binIdBlue = scorer === 'blue' ? (params.get('binId') || '') : '';
+  JSONBIN.apiKey = params.get('apiKey') || '';
+  console.log('Scorer role detected:', syncRole, 'binIdRed:', JSONBIN.binIdRed, 'binIdBlue:', JSONBIN.binIdBlue);
+
+  // Hide nav buttons except score
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    const pg = b.getAttribute('onclick') || '';
+    if (!pg.includes("'score'")) b.style.display = 'none';
+  });
+
+  // Update header title safely
+  const titleEl = document.querySelector('.title');
+  if (titleEl) {
+    titleEl.textContent = (scorer === 'red' ? '🔴 RED' : '🔵 BLUE') + ' SCORER';
+    titleEl.style.color = scorer === 'red' ? 'var(--acc)' : 'var(--blue)';
+  }
+
+  // Navigate to score page
+  P('score');
+
+  // Hide the other alliance panel after the form renders
+  setTimeout(() => {
+    const body = document.getElementById('sc-body');
+    if (body) {
+      const grid = body.querySelector('.g2');
+      if (grid) {
+        const panels = grid.children;
+        if (scorer === 'red' && panels[1]) panels[1].style.display = 'none';
+        if (scorer === 'blue' && panels[0]) panels[0].style.display = 'none';
+      }
+    }
+    // Hide the other total box
+    const totR = document.getElementById('tot-r');
+    const totB = document.getElementById('tot-b');
+    if (scorer === 'red' && totB) {
+      const parent = totB.closest('.tot');
+      if (parent) parent.style.display = 'none';
+    }
+    if (scorer === 'blue' && totR) {
+      const parent = totR.closest('.tot');
+      if (parent) parent.style.display = 'none';
+    }
+    // Hide flow bar and Submit+Finish button
+    document.querySelectorAll('.card').forEach(c => {
+      if (c.innerHTML.includes('Scoreboard:') || c.innerHTML.includes('flow')) {
+        c.style.display = 'none';
+      }
+    });
+    document.querySelectorAll('button').forEach(b => {
+      if (b.textContent.includes('Finish')) b.style.display = 'none';
+    });
+  }, 400);
+}
 }
 initUI();
 setInterval(()=>{if(document.getElementById('page-sb').classList.contains('active'))updSBPrev();},1000);
