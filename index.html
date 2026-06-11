@@ -444,6 +444,7 @@ async function syncPull(binId) {
 }
 
 function startSyncPoll() {
+    console.log('startSyncPoll called, syncRole:', syncRole, 'binIdRed:', JSONBIN.binIdRed, 'binIdBlue:', JSONBIN.binIdBlue, 'apiKey:', JSONBIN.apiKey?.slice(0,10));
   if (syncPollInterval) clearInterval(syncPollInterval);
 
   if (syncRole === 'main') {
@@ -477,8 +478,11 @@ function startSyncPoll() {
   } else {
     // Scorer device polls its own bin for match_update from main device
     const myBin = syncRole === 'red' ? JSONBIN.binIdRed : JSONBIN.binIdBlue;
+    console.log('Scorer starting poll, myBin:', myBin, 'syncRole:', syncRole);
     syncPollInterval = setInterval(async () => {
+      console.log('Scorer poll tick, myBin:', myBin);
       const rec = await syncPull(myBin);
+      console.log('Scorer poll result:', rec);
       if (!rec) return;
 
       if (rec.type === 'match_update') {
