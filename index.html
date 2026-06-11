@@ -558,30 +558,95 @@ function loadSamples(){S.teams=[{num:'101',name:'Iron Wolves'},{num:'202',name:'
 /* Schedule */
 function genSched() {
   if (S.teams.length < 4) { alert('Need at least 4 teams'); return; }
-  const nums = S.teams.map(t => t.num), tgt = S.event.twPer;
-  const mxs = [], cnts = {};
-  nums.forEach(n => { cnts[n] = 0; });
-  let att = 0;
-  while (nums.some(n => cnts[n] < tgt) && att < 6000) {
-    att++;
-    const el = nums.filter(n => cnts[n] < tgt);
-    if (el.length < 4) break;
-    el.sort((a, b) => cnts[a] - cnts[b]);
-    const pool = el.slice(0, Math.max(4, Math.ceil(el.length * .6)));
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    const p = [], used = new Set();
-    for (let i = 0; i < pool.length && p.length < 4; i++) {
-      if (!used.has(pool[i])) { p.push(pool[i]); used.add(pool[i]); }
-    }
-    if (p.length < 4) break;
-    mxs.push({ id: 'Q' + (mxs.length + 1), num: mxs.length + 1, type: 'qual', red: [p[0], p[1]], blue: [p[2], p[3]], status: 'pending' });
-    p.forEach(n => cnts[n]++);
+  const nums = S.teams.map(t => t.num);
+  const n = nums.length;
+  const target = S.event.twPer;
+
+  // Calculate how many total match slots we need so every team gets AT LEAST target matches.
+  // Each match uses 4 slots. Round UP to the nearest multiple of 4.
+  const minSlots = n * target;
+  const totalSlots = Math.ceil(minSlots / 4) * 4;
+  const totalMatches = totalSlots / 4;
+
+  // Build the pool: distribute slots as evenly as possible, going over rather than under.
+  // Base allocation per team, then distribute the remainder one slot at a time.
+  const basePerTeam = Math.floor(totalSlots / n);
+  const remainder = totalSlots - (basePerTeam * n);
+  // Teams that get one extra slot to make up the remainder
+  const pool = [];
+  nums.forEach((num, i) => {
+    const slots = basePerTeam + (i < remainder ? 1 : 0);
+    for (let s = 0; s < slots; s++) pool.push(num);
+  });
+
+  // Shuffle pool
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  S.matches = mxs; S.results = []; S.currentMatch = null; S.onDeckMatch = null;
-  save(); ss('gen-st', `Generated ${mxs.length} matches for ${nums.length} teams!`, 's');
+
+  // Pull matches from the pool with retries if we hit a dead end
+  const MAX_ATTEMPTS = 200;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    // Re-shuffle on retry
+    if (attempt > 0) {
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+    }
+
+    const tempPool = [...pool];
+    const tempMatches = [];
+    let failed = false;
+
+    while (tempPool.length >= 4) {
+      const t1 = tempPool.shift();
+      const t2i = tempPool.findIndex(t => t !== t1);
+      if (t2i === -1) { failed = true; break; }
+      const t2 = tempPool.splice(t2i, 1)[0];
+      const t3i = tempPool.findIndex(t => t !== t1 && t !== t2);
+      if (t3i === -1) { failed = true; break; }
+      const t3 = tempPool.splice(t3i, 1)[0];
+      const t4i = tempPool.findIndex(t => t !== t1 && t !== t2 && t !== t3);
+      if (t4i === -1) { failed = true; break; }
+      const t4 = tempPool.splice(t4i, 1)[0];
+
+      tempMatches.push({
+        id: 'Q' + (tempMatches.length + 1),
+        num: tempMatches.length + 1,
+        type: 'qual',
+        red: [t1, t2],
+        blue: [t3, t4],
+        status: 'pending'
+      });
+    }
+
+    if (!failed && tempPool.length === 0) {
+      // Verify every team hits at least the target
+      const counts = {};
+      nums.forEach(n => { counts[n] = 0; });
+      tempMatches.forEach(m => [...m.red, ...m.blue].forEach(t => counts[t]++));
+      const allMeetTarget = nums.every(n => counts[n] >= target);
+
+      if (allMeetTarget) {
+        S.matches = tempMatches;
+        S.results = [];
+        S.currentMatch = null;
+        S.onDeckMatch = null;
+        save();
+        const maxCount = Math.max(...Object.values(counts));
+        const minCount = Math.min(...Object.values(counts));
+        const note = minCount === maxCount
+          ? `Generated ${tempMatches.length} matches — every team plays exactly ${minCount} times`
+          : `Generated ${tempMatches.length} matches — teams play ${minCount}–${maxCount} times (target was ${target})`;
+        ss('gen-st', note, 's');
+        return;
+      }
+    }
+  }
+
+  ss('gen-st', `Could not generate a valid schedule after ${MAX_ATTEMPTS} attempts — try a different team count or match count`, 'd');
 }
 function importCSV(){const raw=document.getElementById('csv-in').value.trim();if(!raw){alert('Paste CSV first');return;}const added=[];raw.split('\n').map(l=>l.trim()).filter(l=>l&&!l.startsWith('#')).forEach(line=>{const c=line.split(',').map(x=>x.trim()).filter(Boolean);if(c.length>=4)added.push({id:'Q'+(S.matches.length+added.length+1),num:S.matches.length+added.length+1,type:'qual',red:[c[0],c[1]],blue:[c[2],c[3]],status:'pending'});});if(!added.length){ss('csv-st','No valid rows','d');return;}S.matches=[...S.matches,...added];save();ss('csv-st',`Imported ${added.length} matches!`,'s');document.getElementById('csv-in').value='';}
 function openAddMatch(){const opts=S.teams.map(t=>`<option value="${t.num}">${t.num} – ${t.name}</option>`).join('');['ar1','ar2','ab1','ab2'].forEach(id=>document.getElementById(id).innerHTML=opts);OM('am-modal');}
