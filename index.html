@@ -281,6 +281,10 @@ tr:hover td{background:var(--bg)}
       <button class="sbbtn" id="stb-live" onclick="setSBState('live')">▶ Live</button>
       <button class="sbbtn" id="stb-splash" onclick="setSBState('splash')">🏆 Splash</button>
       <button class="sbbtn" id="stb-post" onclick="setSBState('post')">📊 Post</button>
+      <label class="tog-wrap" style="margin-left:8px">
+  <span>Hide live scores</span>
+  <label class="tog"><input type="checkbox" id="hide-scores-tog" onchange="toggleHideScores()"><span class="tog-sl"></span></label>
+</label>
     </div>
     <div class="card" style="margin-bottom:12px;border-color:#7C3AED;background:var(--purple-bg,var(--blue-bg))">
   <div class="ch">🔗 Remote scoring setup</div>
@@ -755,9 +759,41 @@ function openEditScore(mid){
 function saveEdit(){doSubmit(true);}
 
 /* Timer */
-function tmrStart(){if(tmrRun)return;tmrRun=true;tmrInt=setInterval(()=>{if(tmrVal>0){tmrVal--;pushSBTmr();}else{clearInterval(tmrInt);tmrRun=false;livePaused=true;const lp=document.getElementById('lp-tog');if(lp)lp.checked=true;pushSB();}},1000);}
-function tmrPause(){clearInterval(tmrInt);tmrRun=false;pushSBTmr();}
-function tmrReset(){tmrPause();tmrVal=tmrMax;pushSBTmr();}
+function tmrStart() {
+  if (tmrRun) return;
+  tmrRun = true;
+  tmrInt = setInterval(() => {
+    if (tmrVal > 0) {
+      tmrVal--;
+      // Pause automatically when auto ends (drops below 160)
+      if (tmrVal === 160 && tmrMax === 180) {
+        clearInterval(tmrInt);
+        tmrRun = false;
+        pushSBTmr();
+        const fs = document.getElementById('flow-st');
+        if (fs) fs.textContent = 'Auto ended — press Start timer to begin Tele-op';
+        return;
+      }
+      pushSBTmr();
+    } else {
+      clearInterval(tmrInt);
+      tmrRun = false;
+      livePaused = true;
+      const lp = document.getElementById('lp-tog');
+      if (lp) lp.checked = true;
+      pushSB();
+    }
+  }, 1000);
+}
+function tmrPause(){
+  clearInterval(tmrInt);
+  tmrRun=false;pushSBTmr();
+}
+function tmrReset(){
+  tmrPause();
+  tmrVal=tmrMax;
+  pushSBTmr();
+}
 function tmrSetMode(v){tmrMax=parseInt(v);tmrReset();}
 function tmrToggle(){tmrEnabled=document.getElementById('tmr-en').checked;pushSBTmr();}
 function tmrFmt(s){return`${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;}
@@ -800,7 +836,8 @@ function buildPayload(){
     lastRes:lastRes&&lastM?{matchId:lastRes.matchId,matchNum:lastM.num,redScore:lastRes.redScore,blueScore:lastRes.blueScore,raw:lastRes.raw,red:lastM.red.map(n=>({num:n,...gT(n)})),blue:lastM.blue.map(n=>({num:n,...gT(n)}))}:null,
     lR,lB,lRaw,livePaused,
     tmr:{v:tmrVal,mx:tmrMax,run:tmrRun,en:tmrEnabled,fmt:tmrFmt(tmrVal),per:tmrPeriod(tmrVal)},
-    ranks:computeStats().slice(0,10)
+    ranks:computeStats().slice(0,10),
+    hideScores: !!window.sbHideScores
   };
 }
 
@@ -875,7 +912,7 @@ function buildSBHTML(p){
       <div style="display:flex;height:122px;flex-shrink:0">
         <div style="flex:1;background:linear-gradient(135deg,#7f1d1d,#991b1b);display:flex;flex-direction:column;align-items:center;justify-content:center">
           <div style="font-size:9px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;opacity:.5;color:#fff;margin-bottom:2px">🔴 RED · ${rT}</div>
-          <div style="font-size:74px;font-weight:900;line-height:1;letter-spacing:-4px;color:#fff">${lr}</div>
+          <div style="font-size:74px;font-weight:900;line-height:1;letter-spacing:-4px;color:#fff">${p.hideScores ? '—' : lr}</div>
           <div style="font-size:10px;opacity:.35;color:#fff;margin-top:2px">${rN}</div>
         </div>
         <div style="width:165px;background:#0a0a08;display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:2px solid #252320;border-right:2px solid #252320;flex-shrink:0;gap:3px">
@@ -883,7 +920,7 @@ function buildSBHTML(p){
         </div>
         <div style="flex:1;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);display:flex;flex-direction:column;align-items:center;justify-content:center">
           <div style="font-size:9px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;opacity:.5;color:#fff;margin-bottom:2px">🔵 BLUE · ${bT}</div>
-          <div style="font-size:74px;font-weight:900;line-height:1;letter-spacing:-4px;color:#fff">${lb}</div>
+          <div style="font-size:74px;font-weight:900;line-height:1;letter-spacing:-4px;color:#fff">${p.hideScores ? '—' : lb}</div>
           <div style="font-size:10px;opacity:.35;color:#fff;margin-top:2px">${bN}</div>
         </div>
       </div>
@@ -1051,5 +1088,12 @@ if (scorer === 'red' || scorer === 'blue') {
 }
 initUI();
 setInterval(()=>{if(document.getElementById('page-sb').classList.contains('active'))updSBPrev();},1000);
+
+function toggleHideScores() {
+  const hide = document.getElementById('hide-scores-tog')?.checked;
+  pushSB();
+  // Store it so buildSBHTML can read it
+  window.sbHideScores = !!hide;
+}
 </script>
 </body></html>
