@@ -399,6 +399,9 @@ const JSONBIN = {
 let syncRole = 'main';   // 'main' | 'red' | 'blue'
 let syncPollInterval = null;
 let lastSyncEtag = null;
+let syncCurrentMatchId = null;
+let syncCurrentMatch = null;
+
 
 async function syncPush(payload) {
   console.log('syncPush called', payload, 'binIdRed:', JSONBIN.binIdRed, 'binIdBlue:', JSONBIN.binIdBlue, 'apiKey:', JSONBIN.apiKey?.slice(0,10));
@@ -442,23 +445,23 @@ async function syncPull(binId) {
 
 function startSyncPoll() {
   if (syncPollInterval) clearInterval(syncPollInterval);
+
   if (syncRole === 'main') {
+    // Main device polls both bins for incoming scores
     syncPollInterval = setInterval(async () => {
       if (!S.currentMatch) return;
       const m = S.currentMatch;
-
-      // Poll red and blue bins independently — no collision possible
       const [recRed, recBlue] = await Promise.all([
         syncPull(JSONBIN.binIdRed),
         syncPull(JSONBIN.binIdBlue)
       ]);
-
       [recRed, recBlue].forEach(rec => {
-        if (!rec || rec.type !== 'score_update') return;
+        if (!rec) return;
+        if (rec.type !== 'score_update') return;
         if (rec.matchId && rec.matchId !== m.id) return;
         const side = rec.side;
         const raw = rec.raw;
-        if (!side || !raw) return;
+        if (!side || !raw || Object.keys(raw).length === 0) return;
         const testEl = document.getElementById(`main_${side}_auto_leave`);
         if (!testEl) return;
         Object.keys(raw).forEach(k => {
@@ -469,6 +472,32 @@ function startSyncPoll() {
         });
         recalc('main');
       });
+    }, JSONBIN.pollMs);
+
+  } else {
+    // Scorer device polls its own bin for match_update from main device
+    const myBin = syncRole === 'red' ? JSONBIN.binIdRed : JSONBIN.binIdBlue;
+    syncPollInterval = setInterval(async () => {
+      const rec = await syncPull(myBin);
+      if (!rec) return;
+
+      if (rec.type === 'match_update') {
+        // Main device has called a new match — update scorer's local state
+        const alreadyCurrent = syncCurrentMatchId === rec.matchId;
+        if (!alreadyCurrent) {
+          syncCurrentMatchId = rec.matchId;
+          // Build a minimal match object so the score form can render
+          syncCurrentMatch = {
+            id: rec.matchId,
+            num: rec.matchNum,
+            type: 'qual',
+            red: rec.red || [],
+            blue: rec.blue || []
+          };
+          // Re-render the score page with the new match
+          renderScoreForScorer();
+        }
+      }
     }, JSONBIN.pollMs);
   }
 }
@@ -510,6 +539,35 @@ function save(){try{localStorage.setItem('hhf',JSON.stringify(S))}catch(e){}}
 function load(){try{const d=localStorage.getItem('hhf')||localStorage.getItem('hh_v3')||localStorage.getItem('hh_v2');if(d)S=JSON.parse(d);}catch(e){}
   if(!S.event)S.event={name:'',twPer:5};if(!S.teams)S.teams=[];if(!S.matches)S.matches=[];if(!S.results)S.results=[];}
 load();
+async function pushMatchToScorers(m) {
+  if (!JSONBIN.apiKey) return;
+  // Write match info into both bins so scorers know which match is active
+  const payload = {
+    type: 'match_update',
+    matchId: m.id,
+    matchNum: m.num,
+    red: m.red,
+    blue: m.blue,
+    ts: Date.now()
+  };
+  // Write to red bin with side tagged
+  const redBin = JSONBIN.binIdRed;
+  const blueBin = JSONBIN.binIdBlue;
+  if (redBin) {
+    await fetch(`https://api.jsonbin.io/v3/b/${redBin}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN.apiKey, 'X-Bin-Versioning': 'false' },
+      body: JSON.stringify({ ...payload, side: 'red', raw: {} })
+    }).catch(e => console.warn('pushMatchToScorers red failed', e));
+  }
+  if (blueBin) {
+    await fetch(`https://api.jsonbin.io/v3/b/${blueBin}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN.apiKey, 'X-Bin-Versioning': 'false' },
+      body: JSON.stringify({ ...payload, side: 'blue', raw: {} })
+    }).catch(e => console.warn('pushMatchToScorers blue failed', e));
+  }
+}
 
 /* Dark mode */
 function applyDark(d){document.getElementById('app').setAttribute('data-dark',d?'1':'0');}
@@ -668,6 +726,18 @@ function callMQ(mid){
   S.onDeckMatch=pend[0]||null;
   save();renderQueue();
   if(isAA()){tmrReset();setSBState('pre');}
+  // Push current match info to sync so scorer devices update
+  if (JSONBIN.apiKey) {
+    syncPush({
+      type: 'match_update',
+      matchId: m.id,
+      matchNum: m.num,
+      red: m.red,
+      blue: m.blue,
+      side: 'red'   // will be overwritten per-bin below
+    });
+    pushMatchToScorers(m);
+  }
   pushSB();
 }
 function skipCur(){if(S.currentMatch)skipMQ(S.currentMatch.id,true);}
@@ -768,19 +838,10 @@ function adj(ctx,side,key,d,max){
   if(!el)return;el.textContent=Math.max(0,Math.min(max||999,parseInt(el.textContent||0)+d));
   recalc(ctx);
   // If we're a remote scoring device, push our alliance's scores
-  if (syncRole !== 'main' && ctx === 'main') {
-    const mySide = syncRole; // 'red' or 'blue'
-    if (side === mySide) {
-      const raw = calcD(ctx, side).raw;
-      syncPush({
-        type: 'score_update',
-        matchId: S.currentMatch?.id,
-        side: mySide,
-        raw,
-        ts: Date.now()
-      });
-    }
-  }
+  if (syncRole !== 'main' && ctx === 'main' && side === syncRole) {
+  const raw = calcD(ctx, syncRole).raw;
+  syncPush({ type: 'score_update', matchId: syncCurrentMatchId || null, side: syncRole, raw, ts: Date.now() });
+}
   if(!livePaused&&ctx==='main')pushSBLive();}
 function gV(ctx,side,k){return parseInt(document.getElementById(`${ctx}_${side}_${k}`)?.textContent||0);}
 function gC(ctx,side,k){return document.getElementById(`${ctx}_${side}_${k}`)?.checked||false;}
@@ -1200,6 +1261,50 @@ function flowContinueToTele() {
   const fs = document.getElementById('flow-st');
   if (fs) fs.textContent = 'Tele-op running!';
   pushSBLive();
+}
+
+function renderScoreForScorer() {
+  const m = syncCurrentMatch;
+  const none = document.getElementById('sc-none');
+  const wrap = document.getElementById('sc-wrap');
+  if (!m) {
+    none.style.display = '';
+    wrap.style.display = 'none';
+    return;
+  }
+  none.style.display = 'none';
+  wrap.style.display = '';
+
+  const rNums = (m.red || []).join(' + ');
+  const bNums = (m.blue || []).join(' + ');
+  document.getElementById('sc-ttl').textContent = `Match ${m.num}`;
+  document.getElementById('sc-sub').innerHTML =
+    `<span class="cr">${rNums}</span> vs <span class="cb">${bNums}</span>`;
+
+  // Render a blank score form (no existing raw — fresh match)
+  document.getElementById('sc-body').innerHTML = bForm('main', {});
+  recalc('main');
+
+  // Re-apply scorer restrictions
+  const scorer = syncRole;
+  setTimeout(() => {
+    const body = document.getElementById('sc-body');
+    if (body) {
+      const grid = body.querySelector('.g2');
+      if (grid) {
+        const panels = grid.children;
+        if (scorer === 'red' && panels[1]) panels[1].style.display = 'none';
+        if (scorer === 'blue' && panels[0]) panels[0].style.display = 'none';
+      }
+    }
+    const totR = document.getElementById('tot-r');
+    const totB = document.getElementById('tot-b');
+    if (scorer === 'red' && totB) { const p = totB.closest('.tot'); if (p) p.style.display = 'none'; }
+    if (scorer === 'blue' && totR) { const p = totR.closest('.tot'); if (p) p.style.display = 'none'; }
+    document.querySelectorAll('button').forEach(b => {
+      if (b.textContent.includes('Finish')) b.style.display = 'none';
+    });
+  }, 50);
 }
 //hi I'm test git right now I just changed my username
 </script>
