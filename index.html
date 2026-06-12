@@ -401,22 +401,21 @@ let syncPollInterval = null;
 let lastSyncEtag = null;
 let syncCurrentMatchId = null;
 let syncCurrentMatch = null;
+let lastPushedMatchId = null;
 
 
 async function syncPush(payload) {
   const binId = payload.side === 'red' ? JSONBIN.binIdRed : JSONBIN.binIdBlue;
   if (!binId || !JSONBIN.apiKey) return;
-  try {
-    const current = await syncPull(binId) || {};
-    await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN.apiKey, 'X-Bin-Versioning': 'false' },
-      body: JSON.stringify({
-        ...current,
-        score: { matchId: payload.matchId, side: payload.side, raw: payload.raw, ts: payload.ts }
-      })
-    });
-  } catch(e) { console.warn('syncPush failed', e); }
+  const body = JSON.stringify({
+    match: null,
+    score: { matchId: payload.matchId, side: payload.side, raw: payload.raw, ts: payload.ts }
+  });
+  fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN.apiKey, 'X-Bin-Versioning': 'false' },
+    body
+  }).catch(e => console.warn('syncPush failed', e));
 }
 
 async function syncPull(binId) {
@@ -440,7 +439,10 @@ function startSyncPoll() {
     syncPollInterval = setInterval(async () => {
       if (!S.currentMatch) return;
       const m = S.currentMatch;
-      pushMatchToScorers(m);
+      if (lastPushedMatchId !== m.id) {
+        lastPushedMatchId = m.id;
+        pushMatchToScorers(m);
+      }
 
       const [recRed, recBlue] = await Promise.all([
         syncPull(JSONBIN.binIdRed),
@@ -529,20 +531,19 @@ load();
 async function pushMatchToScorers(m) {
   if (!JSONBIN.apiKey) return;
   const matchInfo = { matchId: m.id, matchNum: m.num, red: m.red, blue: m.blue, ts: Date.now() };
+  const body = JSON.stringify({ match: matchInfo, score: null });
   if (JSONBIN.binIdRed) {
-    const current = await syncPull(JSONBIN.binIdRed) || {};
-    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN.binIdRed}`, {
+    fetch(`https://api.jsonbin.io/v3/b/${JSONBIN.binIdRed}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN.apiKey, 'X-Bin-Versioning': 'false' },
-      body: JSON.stringify({ ...current, match: matchInfo })
+      body
     }).catch(e => console.warn('pushMatch red failed', e));
   }
   if (JSONBIN.binIdBlue) {
-    const current = await syncPull(JSONBIN.binIdBlue) || {};
-    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN.binIdBlue}`, {
+    fetch(`https://api.jsonbin.io/v3/b/${JSONBIN.binIdBlue}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN.apiKey, 'X-Bin-Versioning': 'false' },
-      body: JSON.stringify({ ...current, match: matchInfo })
+      body
     }).catch(e => console.warn('pushMatch blue failed', e));
   }
 }
