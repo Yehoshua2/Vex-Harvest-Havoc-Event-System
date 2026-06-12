@@ -404,27 +404,16 @@ let syncCurrentMatch = null;
 
 
 async function syncPush(payload) {
-  console.log('syncPush called', payload, 'binIdRed:', JSONBIN.binIdRed, 'binIdBlue:', JSONBIN.binIdBlue, 'apiKey:', JSONBIN.apiKey?.slice(0,10));
   const binId = payload.side === 'red' ? JSONBIN.binIdRed : JSONBIN.binIdBlue;
-  console.log('using binId:', binId);
-  if (!binId || !JSONBIN.apiKey) {
-    console.warn('syncPush bailed — missing binId or apiKey');
-    return;
-  }
+  if (!binId || !JSONBIN.apiKey) return;
   try {
+    const current = await syncPull(binId) || {};
     await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN.apiKey,
-        'X-Bin-Versioning': 'false'
-      },
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN.apiKey, 'X-Bin-Versioning': 'false' },
       body: JSON.stringify({
-        type: 'score_update',
-        matchId: payload.matchId,
-        side: payload.side,
-        raw: payload.raw,
-        ts: payload.ts
+        ...current,
+        score: { matchId: payload.matchId, side: payload.side, raw: payload.raw, ts: payload.ts }
       })
     });
   } catch(e) { console.warn('syncPush failed', e); }
@@ -448,10 +437,13 @@ function startSyncPoll() {
   if (syncPollInterval) clearInterval(syncPollInterval);
 
   if (syncRole === 'main') {
-    // Main device polls both bins for incoming scores
     syncPollInterval = setInterval(async () => {
       if (!S.currentMatch) return;
       const m = S.currentMatch;
+
+      // Keep broadcasting current match so scorers stay in sync even after reload
+      pushMatchToScorers(m);
+
       const [recRed, recBlue] = await Promise.all([
         syncPull(JSONBIN.binIdRed),
         syncPull(JSONBIN.binIdBlue)
@@ -474,33 +466,23 @@ function startSyncPoll() {
         recalc('main');
       });
     }, JSONBIN.pollMs);
-
+  }
   } else {
-    // Scorer device polls its own bin for match_update from main device
     const myBin = syncRole === 'red' ? JSONBIN.binIdRed : JSONBIN.binIdBlue;
-    console.log('Scorer starting poll, myBin:', myBin, 'syncRole:', syncRole);
     syncPollInterval = setInterval(async () => {
-      console.log('Scorer poll tick, myBin:', myBin);
       const rec = await syncPull(myBin);
-      console.log('Scorer poll result:', rec);
-      if (!rec) return;
-
-      if (rec.type === 'match_update') {
-        // Main device has called a new match — update scorer's local state
-        const alreadyCurrent = syncCurrentMatchId === rec.matchId;
-        if (!alreadyCurrent) {
-          syncCurrentMatchId = rec.matchId;
-          // Build a minimal match object so the score form can render
-          syncCurrentMatch = {
-            id: rec.matchId,
-            num: rec.matchNum,
-            type: 'qual',
-            red: rec.red || [],
-            blue: rec.blue || []
-          };
-          // Re-render the score page with the new match
-          renderScoreForScorer();
-        }
+      if (!rec || !rec.match) return;
+      const matchInfo = rec.match;
+      if (syncCurrentMatchId !== matchInfo.matchId) {
+        syncCurrentMatchId = matchInfo.matchId;
+        syncCurrentMatch = {
+          id: matchInfo.matchId,
+          num: matchInfo.matchNum,
+          type: 'qual',
+          red: matchInfo.red || [],
+          blue: matchInfo.blue || []
+        };
+        renderScoreForScorer();
       }
     }, JSONBIN.pollMs);
   }
@@ -545,31 +527,22 @@ function load(){try{const d=localStorage.getItem('hhf')||localStorage.getItem('h
 load();
 async function pushMatchToScorers(m) {
   if (!JSONBIN.apiKey) return;
-  // Write match info into both bins so scorers know which match is active
-  const payload = {
-    type: 'match_update',
-    matchId: m.id,
-    matchNum: m.num,
-    red: m.red,
-    blue: m.blue,
-    ts: Date.now()
-  };
-  // Write to red bin with side tagged
-  const redBin = JSONBIN.binIdRed;
-  const blueBin = JSONBIN.binIdBlue;
-  if (redBin) {
-    await fetch(`https://api.jsonbin.io/v3/b/${redBin}`, {
+  const matchInfo = { matchId: m.id, matchNum: m.num, red: m.red, blue: m.blue, ts: Date.now() };
+  if (JSONBIN.binIdRed) {
+    const current = await syncPull(JSONBIN.binIdRed) || {};
+    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN.binIdRed}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN.apiKey, 'X-Bin-Versioning': 'false' },
-      body: JSON.stringify({ ...payload, side: 'red', raw: {} })
-    }).catch(e => console.warn('pushMatchToScorers red failed', e));
+      body: JSON.stringify({ ...current, match: matchInfo })
+    }).catch(e => console.warn('pushMatch red failed', e));
   }
-  if (blueBin) {
-    await fetch(`https://api.jsonbin.io/v3/b/${blueBin}`, {
+  if (JSONBIN.binIdBlue) {
+    const current = await syncPull(JSONBIN.binIdBlue) || {};
+    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN.binIdBlue}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN.apiKey, 'X-Bin-Versioning': 'false' },
-      body: JSON.stringify({ ...payload, side: 'blue', raw: {} })
-    }).catch(e => console.warn('pushMatchToScorers blue failed', e));
+      body: JSON.stringify({ ...current, match: matchInfo })
+    }).catch(e => console.warn('pushMatch blue failed', e));
   }
 }
 
