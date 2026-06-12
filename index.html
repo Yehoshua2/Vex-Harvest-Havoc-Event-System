@@ -433,15 +433,13 @@ async function syncPull(binId) {
 }
 
 function startSyncPoll() {
-    console.log('startSyncPoll called, syncRole:', syncRole, 'binIdRed:', JSONBIN.binIdRed, 'binIdBlue:', JSONBIN.binIdBlue, 'apiKey:', JSONBIN.apiKey?.slice(0,10));
+  console.log('startSyncPoll called, syncRole:', syncRole, 'binIdRed:', JSONBIN.binIdRed, 'binIdBlue:', JSONBIN.binIdBlue, 'apiKey:', JSONBIN.apiKey?.slice(0,10));
   if (syncPollInterval) clearInterval(syncPollInterval);
 
   if (syncRole === 'main') {
     syncPollInterval = setInterval(async () => {
       if (!S.currentMatch) return;
       const m = S.currentMatch;
-
-      // Keep broadcasting current match so scorers stay in sync even after reload
       pushMatchToScorers(m);
 
       const [recRed, recBlue] = await Promise.all([
@@ -449,11 +447,11 @@ function startSyncPoll() {
         syncPull(JSONBIN.binIdBlue)
       ]);
       [recRed, recBlue].forEach(rec => {
-        if (!rec) return;
-        if (rec.type !== 'score_update') return;
-        if (rec.matchId && rec.matchId !== m.id) return;
-        const side = rec.side;
-        const raw = rec.raw;
+        if (!rec || !rec.score) return;
+        const sc = rec.score;
+        if (sc.matchId && sc.matchId !== m.id) return;
+        const side = sc.side;
+        const raw = sc.raw;
         if (!side || !raw || Object.keys(raw).length === 0) return;
         const testEl = document.getElementById(`main_${side}_auto_leave`);
         if (!testEl) return;
@@ -466,11 +464,14 @@ function startSyncPoll() {
         recalc('main');
       });
     }, JSONBIN.pollMs);
-  }
+
   } else {
     const myBin = syncRole === 'red' ? JSONBIN.binIdRed : JSONBIN.binIdBlue;
+    console.log('Scorer starting poll, myBin:', myBin, 'syncRole:', syncRole);
     syncPollInterval = setInterval(async () => {
+      console.log('Scorer poll tick, myBin:', myBin);
       const rec = await syncPull(myBin);
+      console.log('Scorer poll result:', rec);
       if (!rec || !rec.match) return;
       const matchInfo = rec.match;
       if (syncCurrentMatchId !== matchInfo.matchId) {
